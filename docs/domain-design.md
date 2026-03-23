@@ -10,6 +10,12 @@
 - 예약 이력과 결제 이력을 분리해 추적 가능성을 높인다.
 - 대기열, 좌석, 결제의 책임을 명확히 분리한다.
 
+현재 구현 단계 메모:
+
+- 로드맵 3단계에서 상태 enum, 도메인 예외, 최소 도메인 모델이 코드에 반영되었다.
+- 다만 아직 상태 전이 메서드와 본격적인 도메인 정책 조합은 구현하지 않았다.
+- 현재 도메인 코드는 구조와 개념을 고정하는 역할에 집중한다.
+
 ## 2. 핵심 도메인 모델
 
 ### 2.1 User
@@ -79,6 +85,11 @@
 - `USED`
 - `EXPIRED`
 
+현재 코드 반영:
+
+- `QueueToken` 최소 도메인 모델과 `QueueTokenStatus` enum을 분리해 반영했다.
+- `QueueTokenNotActiveException`을 별도 도메인 예외로 정의했다.
+
 ### 2.5 UserBalance
 
 역할:
@@ -95,6 +106,11 @@
 설명:
 
 - `version` 필드를 이용해 낙관적 락을 기본 적용한다.
+
+현재 코드 반영:
+
+- `UserBalance` 최소 도메인 모델과 `InsufficientBalanceException`, `OptimisticLockConflictException` 골격을 반영했다.
+- 실제 `version` 기반 충돌 처리 로직은 아직 구현하지 않았다.
 
 ### 2.6 BalanceTransaction
 
@@ -141,6 +157,11 @@
 - `HELD`
 - `RESERVED`
 
+현재 코드 반영:
+
+- `SeatStatus` enum을 먼저 도입해 좌석 상태 개념을 코드에 고정했다.
+- 실제 `SeatInventory` 상태 전이와 조건부 업데이트는 다음 단계에서 persistence와 함께 구현한다.
+
 설명:
 
 - 좌석 조회와 선점 가능 여부 판단은 이 엔티티를 기준으로 한다.
@@ -173,6 +194,11 @@
 
 - 현재 좌석 상태는 `SeatInventory`가 관리하고, 예약 이력은 `Reservation`이 관리한다.
 
+현재 코드 반영:
+
+- `Reservation` 최소 도메인 모델과 `ReservationStatus` enum을 도입했다.
+- `ReservationExpiredException`, `UserAlreadyHasHeldSeatException`을 별도 예외로 정의했다.
+
 ### 2.9 Payment
 
 역할:
@@ -193,6 +219,10 @@
 
 - `SUCCESS`
 - `FAILED`
+
+현재 코드 반영:
+
+- `Payment` 최소 도메인 모델과 `PaymentStatus` enum을 추가했다.
 
 ## 3. 도메인 관계
 
@@ -247,6 +277,11 @@
 - `ACTIVE` 슬롯이 비는 조건은 `USED`, `EXPIRED`, 운영 정책에 의한 강제 종료다.
 - 승격은 대기번호 조회, 토큰 검증 직전 보정 로직, 스케줄러 중 하나에서 수행할 수 있다.
 - 어떤 경로로 승격을 시도하더라도 최종 승격 성공은 트랜잭션 안에서 다시 판정한다.
+
+주의:
+
+- 현재 단계에서는 위 상태 흐름을 설명하는 enum과 예외만 반영했다.
+- 실제 승격 로직과 상태 전이 메서드는 아직 구현하지 않았다.
 
 ### 5.2 좌석 흐름
 

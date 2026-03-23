@@ -11,6 +11,12 @@
 - Mock과 Stub은 application 서비스 테스트의 기본 도구로 사용한다.
 - 동시성 및 조건부 업데이트는 별도 통합 테스트로 검증한다.
 
+현재 단계 메모:
+
+- 로드맵 3단계에서는 테스트 강화보다 계층 구조 분리를 우선했다.
+- 현재는 `usecase/facade/port.out/infrastructure.mock` 골격이 생긴 상태이며, 실제 DB와 트랜잭션을 전제로 하는 테스트는 아직 작성하지 않았다.
+- 이 단계에서 테스트를 미룬 이유는 persistence, 조건부 업데이트, 낙관적 락, 만료 재검증 로직이 아직 실제 구현되지 않았기 때문이다.
+
 ## 3. 계층별 테스트 범위
 
 ### 3.1 domain 테스트
@@ -47,6 +53,12 @@
 - Repository Port, EventPublisher, Clock 등을 Mock 또는 Stub으로 대체한다.
 - 외부 기술 없이 유스케이스의 의도와 분기 로직을 검증한다.
 
+현재 코드 기준 적용 방향:
+
+- `facade`가 application 테스트의 직접 대상이 된다.
+- `port.out`을 Mock 또는 Stub으로 바꿔 유스케이스 흐름을 검증한다.
+- 현재는 facade가 얇기 때문에 구조 검증 중심이며, 다음 단계부터 트랜잭션 순서와 예외 분기가 본격적으로 추가된다.
+
 예시:
 
 - 좌석 예약 성공 시 예약 생성과 만료 시각 반환
@@ -68,6 +80,11 @@
 - `@DataJpaTest`, `@SpringBootTest` 등을 상황에 맞게 사용한다.
 - 실제 DB 동작과 쿼리 결과를 확인한다.
 
+다음 단계 연결:
+
+- `infrastructure.persistence`가 추가되면 persistence 통합 테스트가 별도 대상으로 명확해진다.
+- 조건부 업데이트, 낙관적 락, 인덱스 영향, 스케줄러 정리 쿼리 등을 이 계층에서 검증한다.
+
 예시:
 
 - 좌석 조건부 업데이트가 한 건만 성공하는지
@@ -80,19 +97,20 @@
 
 application 서비스는 아래와 같은 포트에 의존하도록 설계한다.
 
-- `QueueTokenReader`
-- `QueueTokenWriter`
-- `SeatInventoryRepositoryPort`
-- `ReservationRepositoryPort`
-- `UserBalanceRepositoryPort`
-- `PaymentRepositoryPort`
-- `BalanceTransactionRepositoryPort`
-- `ClockHolder`
-- `DomainEventPublisher`
+- `QueueTokenPort`
+- `ConcertQueryPort`
+- `ReservationPort`
+- `BalancePort`
+- `PaymentPort`
+- 이후 필요 시 `SeatInventoryRepositoryPort`
+- 이후 필요 시 `UserBalanceRepositoryPort`
+- 이후 필요 시 `ClockHolder`
+- 이후 필요 시 `DomainEventPublisher`
 
 장점:
 
 - 테스트에서 InMemory Stub 또는 Mock 구현으로 쉽게 교체할 수 있다.
+- 현재는 `infrastructure.mock` adapter가 이 포트들을 구현하고 있다.
 
 ### 4.2 Clock 분리
 
@@ -132,6 +150,11 @@ application 서비스는 아래와 같은 포트에 의존하도록 설계한다
 - 이 영역은 실제 DB 동작 차이를 많이 타므로 통합 테스트가 더 적합하다.
 
 ## 6. 핵심 유스케이스 테스트 목록
+
+주의:
+
+- 아래 목록은 최종 목표 기준이다.
+- 현재 3단계에서는 구조상 테스트 대상 분리만 끝났고, 실제 정합성 테스트는 다음 단계 구현 이후 착수한다.
 
 ### 6.1 대기열
 
@@ -225,6 +248,11 @@ application 서비스는 아래와 같은 포트에 의존하도록 설계한다
 - 이벤트 발행 실패는 핵심 트랜잭션과 분리해 재시도 가능한지 검토
 - Outbox 패턴 도입 시 별도 통합 테스트 추가 가능
 
+현재 상태:
+
+- 트랜잭션 경계, 롤백, 보상 처리는 아직 코드에 본격 반영하지 않았다.
+- 따라서 이 섹션의 테스트는 4단계 이후 실제 persistence와 서비스 흐름 구현이 들어간 다음 수행한다.
+
 ## 9. 예외 처리 테스트 전략
 
 검증 대상:
@@ -257,6 +285,12 @@ application 서비스는 아래와 같은 포트에 의존하도록 설계한다
 - Testcontainers 또는 로컬 DB 기반 통합 테스트
 
 ## 12. 우선순위
+
+### 12.0 현재 단계와 다음 단계 연결
+
+- 현재 단계는 `application facade`와 `port.out`, `infrastructure.mock` 구조를 고정한 단계다.
+- 다음 단계에서는 facade를 기준으로 유스케이스 통합 테스트 범위를 잡고, `infrastructure.persistence` 추가 후 persistence 통합 테스트를 분리한다.
+- 이 분리는 이후 STEP07, STEP08에서 성능 분석과 인덱스 설계 포인트를 영속성 계층 중심으로 좁히는 데 도움이 된다.
 
 ### 12.1 1순위
 

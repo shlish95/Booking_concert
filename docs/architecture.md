@@ -15,6 +15,12 @@
 - presentation은 입출력 변환에 집중한다.
 - 의존성은 안쪽 계층으로만 향한다.
 
+현재 구현 단계 메모:
+
+- 현재는 로드맵 3단계로서 실제 DB 정합성 구현 전의 골격 단계다.
+- 목적은 기능 완성보다 계층 구조와 책임을 코드에 드러내는 데 있다.
+- 실제 persistence 대신 `infrastructure.mock`이 포트를 구현해 구조를 먼저 고정했다.
+
 ## 3. 계층 구조
 
 ```text
@@ -30,6 +36,13 @@ presentation -> application -> domain
 - `application`은 `domain` 규칙을 사용한다.
 - `infrastructure`는 `application` 또는 `domain`에서 정의한 포트 구현체를 제공한다.
 - `domain`은 어떤 외부 기술에도 의존하지 않는다.
+
+현재 코드 기준 흐름:
+
+- Controller는 `usecase` 인터페이스를 주입받는다.
+- `facade`는 `usecase`를 구현하고 `port.out`을 통해 바깥 계층과 통신한다.
+- `infrastructure.mock` adapter는 `port.out` 구현체로 동작한다.
+- 기존 `application/mock/MockApiService` 직접 호출 구조는 제거되었다.
 
 ## 4. 계층별 책임
 
@@ -59,6 +72,13 @@ presentation -> application -> domain
 - 외부 포트 호출
 - 이벤트 발행
 - 예외 매핑
+
+현재 코드 구조:
+
+- `usecase`: presentation이 의존하는 애플리케이션 계약
+- `dto`: request 성격의 command/query와 response 성격의 result
+- `facade`: 현재는 얇은 오케스트레이션 계층이며 이후 트랜잭션 경계와 검증 순서가 들어갈 위치
+- `port.out`: infrastructure 세부 구현을 추상화하는 출력 포트
 
 대표 유스케이스 예시:
 
@@ -90,6 +110,18 @@ presentation -> application -> domain
 - domain exception
 - repository port
 
+현재 코드 반영 범위:
+
+- 상태 enum
+- 도메인 예외
+- 최소 도메인 모델
+
+아직 본격 구현하지 않은 것:
+
+- 상태 전이 메서드
+- 정책 객체
+- 복합 도메인 규칙 조합
+
 ### 4.4 infrastructure
 
 주요 책임:
@@ -100,6 +132,15 @@ presentation -> application -> domain
 - 스케줄러 구현
 - 이벤트 발행 구현
 - 로깅 설정
+
+현재 단계에서는 아래만 반영되어 있다.
+
+- `infrastructure.mock`: 포트를 구현하는 mock adapter
+
+의도:
+
+- mock 구현체도 바깥 계층에 둬야 application이 구체 구현을 모르게 할 수 있다.
+- 이후 `infrastructure.persistence`를 추가해도 presentation/application 코드를 크게 바꾸지 않도록 하기 위함이다.
 
 ## 5. 패키지 구조 예시
 
@@ -113,10 +154,14 @@ com.example.bookingconcert
   │  └─ common
   ├─ application
   │  ├─ queue
+  │  │  ├─ usecase
+  │  │  ├─ facade
+  │  │  ├─ port/out
+  │  │  └─ dto
   │  ├─ reservation
   │  ├─ payment
   │  ├─ balance
-  │  └─ common
+  │  └─ concert
   ├─ domain
   │  ├─ queue
   │  ├─ concert
@@ -126,11 +171,19 @@ com.example.bookingconcert
   │  ├─ balance
   │  └─ common
   └─ infrastructure
+     ├─ mock
      ├─ persistence
      ├─ scheduler
      ├─ event
      └─ logging
 ```
+
+설명:
+
+- `usecase`는 컨트롤러가 의존하는 진입 계약이다.
+- `facade`는 유스케이스 단위 오케스트레이션 계층이다.
+- `port.out`은 infrastructure 의존성을 역전시키는 추상화다.
+- `mock`은 현재 단계의 포트 구현체 자리이며, 이후 `persistence`가 같은 역할을 실제 DB로 대체한다.
 
 ## 6. 의존성 및 DI 전략
 
@@ -139,6 +192,13 @@ com.example.bookingconcert
 - `presentation`은 `application`에만 의존한다.
 - `application`은 `domain`과 포트 인터페이스에 의존한다.
 - `infrastructure`는 포트 구현체로서 `application` 또는 `domain`에서 정의한 인터페이스를 구현한다.
+
+현재 코드상 반영 방식:
+
+- controller 생성자 주입 대상은 `usecase` 인터페이스다.
+- facade 생성자 주입 대상은 `port.out` 인터페이스다.
+- adapter는 `port.out` 구현체로 등록된다.
+- domain은 Spring, JPA, Web 타입을 알지 못한다.
 
 ### 6.2 생성자 주입
 
@@ -256,6 +316,11 @@ com.example.bookingconcert
 
 - application 서비스는 포트 인터페이스에만 의존한다.
 - Repository, Clock, EventPublisher, Scheduler Trigger 등을 Mock 또는 Stub으로 대체 가능하다.
+
+현재 단계 효과:
+
+- facade 테스트는 포트를 대체해 순수 application 테스트로 분리할 수 있다.
+- 향후 persistence 구현 이후에는 같은 유스케이스를 대상으로 통합 테스트 범위를 별도로 잡을 수 있다.
 
 ### 12.2 권장 테스트 분리
 
