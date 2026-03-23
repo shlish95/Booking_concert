@@ -5,7 +5,11 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import kr.hhplus.be.server.application.mock.MockApiService;
+import kr.hhplus.be.server.application.queue.dto.GetQueueTokenQuery;
+import kr.hhplus.be.server.application.queue.dto.IssueQueueTokenCommand;
+import kr.hhplus.be.server.application.queue.dto.QueueTokenResult;
+import kr.hhplus.be.server.application.queue.usecase.GetQueueTokenUseCase;
+import kr.hhplus.be.server.application.queue.usecase.IssueQueueTokenUseCase;
 import kr.hhplus.be.server.presentation.common.ApiResponse;
 import kr.hhplus.be.server.presentation.common.ErrorResponse;
 import kr.hhplus.be.server.presentation.queue.dto.QueueTokenIssueRequest;
@@ -19,10 +23,15 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Queue Token", description = "콘서트별 대기열 토큰 Mock API")
 public class QueueTokenController {
 
-    private final MockApiService mockApiService;
+    private final IssueQueueTokenUseCase issueQueueTokenUseCase;
+    private final GetQueueTokenUseCase getQueueTokenUseCase;
 
-    public QueueTokenController(MockApiService mockApiService) {
-        this.mockApiService = mockApiService;
+    public QueueTokenController(
+            IssueQueueTokenUseCase issueQueueTokenUseCase,
+            GetQueueTokenUseCase getQueueTokenUseCase
+    ) {
+        this.issueQueueTokenUseCase = issueQueueTokenUseCase;
+        this.getQueueTokenUseCase = getQueueTokenUseCase;
     }
 
     @PostMapping
@@ -39,8 +48,10 @@ public class QueueTokenController {
             @Parameter(description = "콘서트 ID", example = "10") @PathVariable Long concertId,
             @RequestBody QueueTokenIssueRequest request
     ) {
+        QueueTokenResult result = issueQueueTokenUseCase.issue(new IssueQueueTokenCommand(concertId, request.userId()));
+
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(mockApiService.issueQueueToken(concertId, request.userId())));
+                .body(ApiResponse.success(toResponse(result)));
     }
 
     @GetMapping("/{token}")
@@ -57,7 +68,21 @@ public class QueueTokenController {
             @Parameter(description = "콘서트 ID", example = "10") @PathVariable Long concertId,
             @Parameter(description = "토큰 값", example = "qt_mock_10_1") @PathVariable String token
     ) {
-        return ResponseEntity.ok(ApiResponse.success(mockApiService.getQueueToken(concertId, token)));
+        QueueTokenResult result = getQueueTokenUseCase.get(new GetQueueTokenQuery(concertId, token));
+        return ResponseEntity.ok(ApiResponse.success(toResponse(result)));
+    }
+
+    private QueueTokenResponse toResponse(QueueTokenResult result) {
+        return new QueueTokenResponse(
+                result.token(),
+                result.concertId(),
+                result.userId(),
+                result.queuePosition(),
+                result.status(),
+                result.issuedAt(),
+                result.activatedAt(),
+                result.expiredAt()
+        );
     }
 
     private record QueueTokenIssueApiResponse(boolean success, QueueTokenResponse data, ErrorResponse error) {

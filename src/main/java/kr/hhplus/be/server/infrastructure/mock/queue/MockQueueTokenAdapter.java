@@ -1,0 +1,40 @@
+package kr.hhplus.be.server.infrastructure.mock.queue;
+
+import kr.hhplus.be.server.application.queue.port.out.QueueTokenPort;
+import kr.hhplus.be.server.domain.queue.QueueToken;
+import kr.hhplus.be.server.domain.queue.QueueTokenStatus;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+
+@Component
+public class MockQueueTokenAdapter implements QueueTokenPort {
+
+    @Override
+    public QueueToken issue(Long concertId, Long userId) {
+        return new QueueToken(
+                "qt_mock_" + concertId + "_" + userId,
+                concertId,
+                userId,
+                125L,
+                QueueTokenStatus.WAITING,
+                LocalDateTime.of(2026, 3, 12, 10, 0, 0),
+                null,
+                null
+        );
+    }
+
+    @Override
+    public QueueToken findByConcertIdAndToken(Long concertId, String token) {
+        return new QueueToken(
+                token,
+                concertId,
+                1L,
+                125L,
+                QueueTokenStatus.WAITING,
+                LocalDateTime.of(2026, 3, 12, 10, 0, 0),
+                null,
+                null
+        );
+    }
+}
