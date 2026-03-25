@@ -3,11 +3,13 @@ package kr.hhplus.be.server.infrastructure.mock.reservation;
 import kr.hhplus.be.server.application.reservation.port.out.ReservationPort;
 import kr.hhplus.be.server.domain.reservation.Reservation;
 import kr.hhplus.be.server.domain.reservation.ReservationStatus;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
 @Component
+@Profile("mock")
 public class MockReservationAdapter implements ReservationPort {
 
     @Override

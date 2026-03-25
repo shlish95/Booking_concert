@@ -2,12 +2,14 @@ package kr.hhplus.be.server.infrastructure.mock.concert;
 
 import kr.hhplus.be.server.application.concert.port.out.ConcertQueryPort;
 import kr.hhplus.be.server.domain.concert.ConcertSchedule;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.List;
 
 @Component
+@Profile("mock")
 public class MockConcertQueryAdapter implements ConcertQueryPort {
 
     @Override

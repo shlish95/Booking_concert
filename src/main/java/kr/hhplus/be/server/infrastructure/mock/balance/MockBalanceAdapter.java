@@ -2,9 +2,11 @@ package kr.hhplus.be.server.infrastructure.mock.balance;
 
 import kr.hhplus.be.server.application.balance.port.out.BalancePort;
 import kr.hhplus.be.server.domain.balance.UserBalance;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile("mock")
 public class MockBalanceAdapter implements BalancePort {
 
     @Override

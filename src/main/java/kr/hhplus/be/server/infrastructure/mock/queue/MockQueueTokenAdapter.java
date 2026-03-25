@@ -3,11 +3,13 @@ package kr.hhplus.be.server.infrastructure.mock.queue;
 import kr.hhplus.be.server.application.queue.port.out.QueueTokenPort;
 import kr.hhplus.be.server.domain.queue.QueueToken;
 import kr.hhplus.be.server.domain.queue.QueueTokenStatus;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
 @Component
+@Profile("mock")
 public class MockQueueTokenAdapter implements QueueTokenPort {
 
     @Override
