@@ -1,0 +1,43 @@
+package kr.hhplus.be.server.infrastructure.persistence.adapter;
+
+import kr.hhplus.be.server.application.balance.port.out.BalancePort;
+import kr.hhplus.be.server.domain.balance.UserBalance;
+import kr.hhplus.be.server.infrastructure.persistence.entity.UserJpaEntity;
+import kr.hhplus.be.server.infrastructure.persistence.mapper.UserBalanceMapper;
+import kr.hhplus.be.server.infrastructure.persistence.repository.UserJpaRepository;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Component
+@Profile("!mock")
+public class BalancePersistenceAdapter implements BalancePort {
+
+    private final UserJpaRepository userJpaRepository;
+    private final UserBalanceMapper userBalanceMapper;
+
+    public BalancePersistenceAdapter(UserJpaRepository userJpaRepository, UserBalanceMapper userBalanceMapper) {
+        this.userJpaRepository = userJpaRepository;
+        this.userBalanceMapper = userBalanceMapper;
+    }
+
+    @Override
+    @Transactional
+    public UserBalance charge(Long userId, Long amount) {
+        UserJpaEntity user = userJpaRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. userId=" + userId));
+
+        Long updatedBalance = user.getBalance() + amount;
+        user.setBalance(updatedBalance);
+        return userBalanceMapper.toDomain(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserBalance get(Long userId) {
+        UserJpaEntity user = userJpaRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다. userId=" + userId));
+
+        return userBalanceMapper.toDomain(user);
+    }
+}
