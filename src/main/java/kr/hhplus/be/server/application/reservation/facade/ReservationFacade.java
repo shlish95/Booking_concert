@@ -1,33 +1,64 @@
 package kr.hhplus.be.server.application.reservation.facade;
 
+import kr.hhplus.be.server.application.concert.port.out.ConcertQueryPort;
 import kr.hhplus.be.server.application.reservation.dto.ReservationResult;
 import kr.hhplus.be.server.application.reservation.dto.ReserveSeatCommand;
 import kr.hhplus.be.server.application.reservation.port.out.ReservationPort;
 import kr.hhplus.be.server.application.reservation.usecase.ReserveSeatUseCase;
+import kr.hhplus.be.server.application.queue.port.out.QueueTokenPort;
+import kr.hhplus.be.server.domain.concert.ConcertSchedule;
+import kr.hhplus.be.server.domain.queue.QueueToken;
+import kr.hhplus.be.server.domain.queue.QueueTokenNotActiveException;
+import kr.hhplus.be.server.domain.queue.QueueTokenStatus;
 import kr.hhplus.be.server.domain.reservation.Reservation;
+import kr.hhplus.be.server.domain.reservation.UserAlreadyHasHeldSeatException;
+import kr.hhplus.be.server.domain.seat.SeatAlreadyHeldException;
+import kr.hhplus.be.server.domain.seat.SeatAlreadyReservedException;
+import kr.hhplus.be.server.domain.seat.SeatStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 
 @Service
 public class ReservationFacade implements ReserveSeatUseCase {
 
+    private static final long HOLD_MINUTES = 5L;
+
+    private final ConcertQueryPort concertQueryPort;
+    private final QueueTokenPort queueTokenPort;
     private final ReservationPort reservationPort;
 
-    public ReservationFacade(ReservationPort reservationPort) {
+    public ReservationFacade(
+            ConcertQueryPort concertQueryPort,
+            QueueTokenPort queueTokenPort,
+            ReservationPort reservationPort
+    ) {
+        this.concertQueryPort = concertQueryPort;
+        this.queueTokenPort = queueTokenPort;
         this.reservationPort = reservationPort;
     }
 
     @Override
+    @Transactional
     public ReservationResult reserve(ReserveSeatCommand command) {
         validateRequest(command);
-        planScheduleLookup(command);
-        planQueueTokenValidation(command);
-        planActiveReservationCheck(command);
-        planSeatLookupAndValidation(command);
-        planReservationExpiration(command);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = calculateTemporaryHoldExpiration(now);
 
-        // TODO: facade가 회차 조회, 토큰 검증, 사용자 활성 임시 예약 확인,
-        // 좌석 상태 검증, 만료 시각 계산, 좌석 hold 반영/예약 저장 순서를 직접 조합하도록 확장한다.
-        Reservation reservation = reserveSeat(command);
+        ConcertSchedule schedule = getSchedule(command.scheduleId());
+        QueueToken queueToken = getAndValidateQueueToken(schedule.concertId(), command.queueToken());
+        validateNoActiveTemporaryReservation(command.userId(), now);
+        ReservationPort.LockedSeat lockedSeat = getLockedSeat(command.scheduleId(), command.seatNumber());
+        validateSeatAvailability(lockedSeat, now);
+
+        Reservation reservation = holdAndSaveTemporaryReservation(
+                command,
+                now,
+                expiresAt,
+                queueToken,
+                lockedSeat
+        );
 
         return new ReservationResult(
                 reservation.reservationId(),
@@ -45,32 +76,65 @@ public class ReservationFacade implements ReserveSeatUseCase {
         }
     }
 
-    private void planScheduleLookup(ReserveSeatCommand command) {
-        // TODO: scheduleId로 회차를 조회하고 예약 대상 회차 존재 여부를 검증한다.
+    private ConcertSchedule getSchedule(Long scheduleId) {
+        return concertQueryPort.getSchedule(scheduleId);
     }
 
-    private void planQueueTokenValidation(ReserveSeatCommand command) {
-        // TODO: queueToken과 concertId 기준 토큰 조회/검증을 facade가 담당한다.
+    private QueueToken getAndValidateQueueToken(Long concertId, String token) {
+        QueueToken queueToken = queueTokenPort.findByConcertIdAndToken(concertId, token);
+        if (queueToken.status() != QueueTokenStatus.ACTIVE) {
+            throw new QueueTokenNotActiveException();
+        }
+        return queueToken;
     }
 
-    private void planActiveReservationCheck(ReserveSeatCommand command) {
-        // TODO: 사용자 활성 임시 예약 존재 여부를 확인하는 흐름을 facade에 둔다.
+    private void validateNoActiveTemporaryReservation(Long userId, LocalDateTime now) {
+        if (reservationPort.hasActiveTemporaryReservation(userId, now)) {
+            throw new UserAlreadyHasHeldSeatException();
+        }
     }
 
-    private void planSeatLookupAndValidation(ReserveSeatCommand command) {
-        // TODO: scheduleId + seatNumber 기준 좌석 조회와 상태 검증을 facade가 담당한다.
+    private ReservationPort.LockedSeat getLockedSeat(Long scheduleId, Integer seatNumber) {
+        return reservationPort.getSeatForUpdate(scheduleId, seatNumber);
     }
 
-    private void planReservationExpiration(ReserveSeatCommand command) {
-        // TODO: 임시 배정 만료 시각 계산과 hold/예약 반영 순서를 facade에서 결정한다.
+    private void validateSeatAvailability(ReservationPort.LockedSeat seat, LocalDateTime now) {
+        if (seat.status() == SeatStatus.RESERVED) {
+            throw new SeatAlreadyReservedException();
+        }
+
+        if (seat.status() == SeatStatus.HELD
+                && seat.holdExpiresAt() != null
+                && seat.holdExpiresAt().isAfter(now)) {
+            throw new SeatAlreadyHeldException();
+        }
     }
 
-    private Reservation reserveSeat(ReserveSeatCommand command) {
-        return reservationPort.reserve(
-                command.queueToken(),
+    private LocalDateTime calculateTemporaryHoldExpiration(LocalDateTime now) {
+        return now.plusMinutes(HOLD_MINUTES);
+    }
+
+    private Reservation holdAndSaveTemporaryReservation(
+            ReserveSeatCommand command,
+            LocalDateTime now,
+            LocalDateTime expiresAt,
+            QueueToken queueToken,
+            ReservationPort.LockedSeat lockedSeat
+    ) {
+        // TODO: 이후 단계에서 queueToken/lockedSeat 기반 로그 포인트와 추가 검증을 보강한다.
+        reservationPort.holdSeat(
+                lockedSeat.scheduleId(),
+                lockedSeat.seatNumber(),
+                command.userId(),
+                expiresAt
+        );
+
+        return reservationPort.saveTemporaryReservation(
                 command.userId(),
                 command.scheduleId(),
-                command.seatNumber()
+                command.seatNumber(),
+                now,
+                expiresAt
         );
     }
 }

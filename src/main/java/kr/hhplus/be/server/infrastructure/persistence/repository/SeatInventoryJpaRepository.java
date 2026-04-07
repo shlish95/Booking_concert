@@ -1,7 +1,9 @@
 package kr.hhplus.be.server.infrastructure.persistence.repository;
 
+import jakarta.persistence.LockModeType;
 import kr.hhplus.be.server.infrastructure.persistence.entity.SeatInventoryJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -12,6 +14,18 @@ import java.util.Optional;
 public interface SeatInventoryJpaRepository extends JpaRepository<SeatInventoryJpaEntity, Long> {
 
     Optional<SeatInventoryJpaEntity> findByScheduleIdAndSeatNumber(Long scheduleId, Integer seatNumber);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select s
+            from SeatInventoryJpaEntity s
+            where s.scheduleId = :scheduleId
+              and s.seatNumber = :seatNumber
+            """)
+    Optional<SeatInventoryJpaEntity> findByScheduleIdAndSeatNumberForUpdate(
+            @Param("scheduleId") Long scheduleId,
+            @Param("seatNumber") Integer seatNumber
+    );
 
     @Query("""
             select s.seatNumber

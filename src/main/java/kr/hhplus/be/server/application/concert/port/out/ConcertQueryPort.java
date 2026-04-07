@@ -8,5 +8,7 @@ public interface ConcertQueryPort {
 
     List<ConcertSchedule> getSchedules(Long concertId);
 
+    ConcertSchedule getSchedule(Long scheduleId);
+
     List<Integer> getAvailableSeatNumbers(Long scheduleId);
 }

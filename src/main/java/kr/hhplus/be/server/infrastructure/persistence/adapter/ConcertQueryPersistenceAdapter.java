@@ -40,6 +40,15 @@ public class ConcertQueryPersistenceAdapter implements ConcertQueryPort {
 
     @Override
     @Transactional(readOnly = true)
+    public ConcertSchedule getSchedule(Long scheduleId) {
+        return concertScheduleMapper.toDomain(
+                concertScheduleJpaRepository.findById(scheduleId)
+                        .orElseThrow(() -> new IllegalArgumentException("회차를 찾을 수 없습니다. scheduleId=" + scheduleId))
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<Integer> getAvailableSeatNumbers(Long scheduleId) {
         return seatInventoryJpaRepository.findAvailableSeatNumbers(scheduleId, LocalDateTime.now());
     }

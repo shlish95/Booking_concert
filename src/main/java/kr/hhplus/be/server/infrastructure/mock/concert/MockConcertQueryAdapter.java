@@ -21,6 +21,11 @@ public class MockConcertQueryAdapter implements ConcertQueryPort {
     }
 
     @Override
+    public ConcertSchedule getSchedule(Long scheduleId) {
+        return new ConcertSchedule(scheduleId, 1L, LocalDate.of(2026, 4, 1));
+    }
+
+    @Override
     public List<Integer> getAvailableSeatNumbers(Long scheduleId) {
         return List.of(1, 2, 3, 7, 8, 9, 12, 13);
     }
