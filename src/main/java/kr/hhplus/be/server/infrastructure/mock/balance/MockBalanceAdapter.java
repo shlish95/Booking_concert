@@ -15,6 +15,11 @@ public class MockBalanceAdapter implements BalancePort {
     }
 
     @Override
+    public UserBalance use(Long userId, Long amount) {
+        return new UserBalance(userId, 150_000L - amount, 1L);
+    }
+
+    @Override
     public UserBalance get(Long userId) {
         return new UserBalance(userId, 150_000L, 0L);
     }

@@ -6,5 +6,7 @@ public interface BalancePort {
 
     UserBalance charge(Long userId, Long amount);
 
+    UserBalance use(Long userId, Long amount);
+
     UserBalance get(Long userId);
 }

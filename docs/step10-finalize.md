@@ -143,12 +143,13 @@ STEP09 분석 결과, 콘서트 예약 서비스에서 가장 중요한 동시�
 ### 변경
 - 잔액 차감
 - 결제 엔티티 저장
+- 현재 구현 기준으로는 `UserJpaEntity.version` 기반 낙관적 락과 `BalancePersistenceAdapter.saveAndFlush`로 충돌을 감지한다.
 
 ### 충돌 처리
 - 동시에 다른 트랜잭션이 먼저 업데이트했다면 버전 충돌 발생
 - 충돌 시:
     - 실패 처리
-    - 또는 제한적 재시도
+- 현재 단계에서는 재시도 없이 `OptimisticLockConflictException`으로 실패 처리한다.
 
 ---
 

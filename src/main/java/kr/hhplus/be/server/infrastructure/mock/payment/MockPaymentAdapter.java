@@ -13,14 +13,19 @@ import java.time.LocalDateTime;
 public class MockPaymentAdapter implements PaymentPort {
 
     @Override
-    public Payment pay(String queueToken, Long userId, Long reservationId) {
+    public Long getPaymentAmount(Long userId, Long reservationId) {
+        return 50_000L;
+    }
+
+    @Override
+    public Payment saveSuccess(Long userId, Long reservationId, Long amount, LocalDateTime paidAt) {
         return new Payment(
                 9001L,
                 reservationId,
                 userId,
-                50_000L,
+                amount,
                 PaymentStatus.SUCCESS,
-                LocalDateTime.of(2026, 3, 12, 10, 2, 0)
+                paidAt
         );
     }
 }
