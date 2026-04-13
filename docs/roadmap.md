@@ -172,6 +172,61 @@
 
 - 현재 구조를 유지하면서 확장 가능한 방향을 설명할 수 있다.
 
+### 2.8 STEP09 동시성 문제 분석과 해결 방식 확정
+
+목표:
+
+- 좌석 선점과 유저 잔액 차감의 동시성 문제를 분석하고 DB 기반 해결 방식을 확정한다.
+
+주요 산출물:
+
+- `docs/steps/step09-concurrency.md`
+
+주요 내용:
+
+- 좌석 선점은 `Pessimistic Lock`을 우선 적용 대상으로 정리했다.
+- 유저 잔액 차감은 `@Version` 기반 `Optimistic Lock`을 우선 적용 대상으로 정리했다.
+- STEP10에서 구현해야 할 테스트 방향과 트랜잭션 고려사항을 함께 정리했다.
+
+관련 브랜치:
+
+- `feature/finalize-concurrency`
+
+최종 반영 브랜치:
+
+- `feature/finalize-concurrency`
+
+### 2.9 STEP10 동시성 구현과 통합 테스트 검증
+
+목표:
+
+- STEP09에서 확정한 동시성 해결 방안을 실제 코드와 통합 테스트로 검증한다.
+
+주요 산출물:
+
+- `docs/steps/step10-finalize.md`
+- `ReservationFacade` 좌석 선점 orchestration 보강
+- `SeatInventoryJpaRepository` 비관적 락 조회 메서드
+- `ReservationFacadeConcurrencyTest`
+- `PaymentFacade` 잔액 차감 orchestration 보강
+- `PaymentFacadeConcurrencyTest`
+
+주요 내용:
+
+- 좌석 선점은 `scheduleId + seatNumber` 기준 `PESSIMISTIC_WRITE`로 구현했다.
+- `ReservationFacade`가 좌석 선점 검증 순서와 저장 순서를 직접 orchestration 하도록 반영했다.
+- 동일 좌석 동시 요청 성공 1건, HELD/RESERVED/만료 경계 시나리오를 테스트로 보강했다.
+- 유저 잔액 차감은 `UserJpaEntity.version` 기반 `Optimistic Lock`으로 구현했다.
+- 같은 사용자에 대한 동시 결제 요청에서 1건만 성공하고 최종 잔액이 3,000원이 되는 시나리오를 테스트로 검증했다.
+
+관련 브랜치:
+
+- `feature/finalize-concurrency`
+
+최종 반영 브랜치:
+
+- `feature/finalize-concurrency`
+
 ## 3. 현재 기준 핵심 정책
 
 - 아키텍처는 도메인 중심의 가벼운 클린 아키텍처를 따른다.
@@ -223,3 +278,5 @@
 - `docs/transaction-sequence.md`: 유스케이스 트랜잭션 흐름
 - `docs/api-spec.md`: API 명세
 - `docs/testing-strategy.md`: 테스트 전략
+- `docs/steps/step09-concurrency.md`: 동시성 문제 분석과 해결 방식 선정
+- `docs/steps/step10-finalize.md`: 동시성 구현 및 통합 테스트 검증
