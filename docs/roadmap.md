@@ -227,6 +227,33 @@
 
 - `feature/finalize-concurrency`
 
+### 2.10 STEP12 조회 캐시 1차 적용
+
+목표:
+
+- Redis 기반 Cache-Aside 전략으로 안전한 조회 API부터 캐시를 적용한다.
+
+주요 산출물:
+
+- `docs/steps/step12-cache.md`
+- `ConcertQueryPersistenceAdapter` 콘서트별 회차 조회 캐시
+- `ConcertQueryPersistenceAdapterTest` 캐시 hit/miss 검증
+
+주요 내용:
+
+- 1차 캐시 대상은 콘서트별 예약 가능 회차 조회로 한정했다.
+- 캐시 키는 `concert:schedules:{concertId}`를 사용한다.
+- TTL은 10분으로 시작한다.
+- 예약/결제 쓰기 흐름과 회차별 예약 가능 좌석 조회 캐시는 이번 단계에서 제외했다.
+
+관련 브랜치:
+
+- `feature/finalize-concurrency`
+
+최종 반영 브랜치:
+
+- `feature/finalize-concurrency`
+
 ## 3. 현재 기준 핵심 정책
 
 - 아키텍처는 도메인 중심의 가벼운 클린 아키텍처를 따른다.
@@ -280,3 +307,4 @@
 - `docs/testing-strategy.md`: 테스트 전략
 - `docs/steps/step09-concurrency.md`: 동시성 문제 분석과 해결 방식 선정
 - `docs/steps/step10-finalize.md`: 동시성 구현 및 통합 테스트 검증
+- `docs/steps/step12-cache.md`: Redis 기반 조회 캐시 1차 적용

@@ -4,6 +4,7 @@ import kr.hhplus.be.server.application.concert.port.out.ConcertQueryPort;
 import kr.hhplus.be.server.application.reservation.dto.ReservationResult;
 import kr.hhplus.be.server.application.reservation.dto.ReserveSeatCommand;
 import kr.hhplus.be.server.application.reservation.port.out.ReservationPort;
+import kr.hhplus.be.server.application.reservation.port.out.UserReservationLockPort;
 import kr.hhplus.be.server.application.reservation.usecase.ReserveSeatUseCase;
 import kr.hhplus.be.server.application.queue.port.out.QueueTokenPort;
 import kr.hhplus.be.server.domain.concert.ConcertSchedule;
@@ -16,7 +17,8 @@ import kr.hhplus.be.server.domain.seat.SeatAlreadyHeldException;
 import kr.hhplus.be.server.domain.seat.SeatAlreadyReservedException;
 import kr.hhplus.be.server.domain.seat.SeatStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 
@@ -28,21 +30,33 @@ public class ReservationFacade implements ReserveSeatUseCase {
     private final ConcertQueryPort concertQueryPort;
     private final QueueTokenPort queueTokenPort;
     private final ReservationPort reservationPort;
+    private final UserReservationLockPort userReservationLockPort;
+    private final TransactionTemplate transactionTemplate;
 
     public ReservationFacade(
             ConcertQueryPort concertQueryPort,
             QueueTokenPort queueTokenPort,
-            ReservationPort reservationPort
+            ReservationPort reservationPort,
+            UserReservationLockPort userReservationLockPort,
+            PlatformTransactionManager transactionManager
     ) {
         this.concertQueryPort = concertQueryPort;
         this.queueTokenPort = queueTokenPort;
         this.reservationPort = reservationPort;
+        this.userReservationLockPort = userReservationLockPort;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
-    @Transactional
     public ReservationResult reserve(ReserveSeatCommand command) {
         validateRequest(command);
+        return userReservationLockPort.executeWithUserLock(
+                command.userId(),
+                () -> transactionTemplate.execute(status -> reserveInTransaction(command))
+        );
+    }
+
+    private ReservationResult reserveInTransaction(ReserveSeatCommand command) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiresAt = calculateTemporaryHoldExpiration(now);
 
