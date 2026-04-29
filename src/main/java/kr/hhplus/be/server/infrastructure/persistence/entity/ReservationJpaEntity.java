@@ -101,4 +101,12 @@ public class ReservationJpaEntity extends BaseJpaEntity {
     public LocalDateTime getConfirmedAt() {
         return confirmedAt;
     }
+
+    public void setStatus(ReservationStatus status) {
+        this.status = status;
+    }
+
+    public void setConfirmedAt(LocalDateTime confirmedAt) {
+        this.confirmedAt = confirmedAt;
+    }
 }

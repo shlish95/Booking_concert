@@ -6,6 +6,7 @@ import kr.hhplus.be.server.application.payment.dto.PayReservationCommand;
 import kr.hhplus.be.server.application.payment.dto.PaymentResult;
 import kr.hhplus.be.server.application.payment.port.out.PaymentPort;
 import kr.hhplus.be.server.application.payment.usecase.PayReservationUseCase;
+import kr.hhplus.be.server.application.ranking.port.out.SoldOutRankingPort;
 import kr.hhplus.be.server.domain.balance.InsufficientBalanceException;
 import kr.hhplus.be.server.domain.balance.OptimisticLockConflictException;
 import kr.hhplus.be.server.domain.balance.UserBalance;
@@ -13,6 +14,7 @@ import kr.hhplus.be.server.domain.payment.Payment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
@@ -20,20 +22,28 @@ public class PaymentFacade implements PayReservationUseCase {
 
     private final BalancePort balancePort;
     private final PaymentPort paymentPort;
+    private final SoldOutRankingPort soldOutRankingPort;
 
-    public PaymentFacade(BalancePort balancePort, PaymentPort paymentPort) {
+    public PaymentFacade(
+            BalancePort balancePort,
+            PaymentPort paymentPort,
+            SoldOutRankingPort soldOutRankingPort
+    ) {
         this.balancePort = balancePort;
         this.paymentPort = paymentPort;
+        this.soldOutRankingPort = soldOutRankingPort;
     }
 
     @Override
     @Transactional
     public PaymentResult pay(PayReservationCommand command) {
         validateRequest(command);
-        Long amount = getPaymentAmount(command);
+        PaymentPort.PaymentContext paymentContext = getPaymentContext(command);
+        Long amount = paymentContext.amount();
         UserBalance currentBalance = getCurrentBalance(command);
         validateSufficientBalance(currentBalance, amount);
-        Payment payment = deductBalanceAndSavePayment(command, amount);
+        Payment payment = deductBalanceAndSavePayment(command, paymentContext);
+        recordSoldOutRankingIfNeeded(paymentContext, payment.paidAt());
 
         return new PaymentResult(
                 payment.paymentId(),
@@ -51,8 +61,8 @@ public class PaymentFacade implements PayReservationUseCase {
         }
     }
 
-    private Long getPaymentAmount(PayReservationCommand command) {
-        return paymentPort.getPaymentAmount(command.userId(), command.reservationId());
+    private PaymentPort.PaymentContext getPaymentContext(PayReservationCommand command) {
+        return paymentPort.getPaymentContext(command.userId(), command.reservationId());
     }
 
     private UserBalance getCurrentBalance(PayReservationCommand command) {
@@ -65,17 +75,32 @@ public class PaymentFacade implements PayReservationUseCase {
         }
     }
 
-    private Payment deductBalanceAndSavePayment(PayReservationCommand command, Long amount) {
+    private Payment deductBalanceAndSavePayment(
+            PayReservationCommand command,
+            PaymentPort.PaymentContext paymentContext
+    ) {
         try {
-            balancePort.use(command.userId(), amount);
+            balancePort.use(command.userId(), paymentContext.amount());
             return paymentPort.saveSuccess(
                     command.userId(),
                     command.reservationId(),
-                    amount,
+                    paymentContext.amount(),
                     LocalDateTime.now()
             );
         } catch (OptimisticLockException | OptimisticLockConflictException e) {
             throw new OptimisticLockConflictException();
         }
+    }
+
+    private void recordSoldOutRankingIfNeeded(PaymentPort.PaymentContext paymentContext, LocalDateTime paidAt) {
+        if (!paymentPort.isScheduleSoldOut(paymentContext.scheduleId())) {
+            return;
+        }
+
+        long soldOutDurationSeconds = Math.max(
+                0,
+                Duration.between(paymentContext.salesOpenedAt(), paidAt).getSeconds()
+        );
+        soldOutRankingPort.recordSoldOutIfAbsent(paymentContext.scheduleId(), soldOutDurationSeconds);
     }
 }

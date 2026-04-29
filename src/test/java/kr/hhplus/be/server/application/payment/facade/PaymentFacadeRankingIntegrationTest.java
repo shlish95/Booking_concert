@@ -2,7 +2,10 @@ package kr.hhplus.be.server.application.payment.facade;
 
 import kr.hhplus.be.server.TestcontainersConfiguration;
 import kr.hhplus.be.server.application.payment.dto.PayReservationCommand;
-import kr.hhplus.be.server.domain.balance.OptimisticLockConflictException;
+import kr.hhplus.be.server.application.ranking.facade.SoldOutRankingFacade;
+import kr.hhplus.be.server.domain.payment.PaymentStatus;
+import kr.hhplus.be.server.domain.reservation.ReservationStatus;
+import kr.hhplus.be.server.domain.seat.SeatStatus;
 import kr.hhplus.be.server.infrastructure.persistence.adapter.BalancePersistenceAdapter;
 import kr.hhplus.be.server.infrastructure.persistence.adapter.PaymentPersistenceAdapter;
 import kr.hhplus.be.server.infrastructure.persistence.entity.ConcertJpaEntity;
@@ -28,16 +31,9 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,15 +44,19 @@ import static org.assertj.core.api.Assertions.assertThat;
         BalancePersistenceAdapter.class,
         PaymentPersistenceAdapter.class,
         RedisSoldOutRankingAdapter.class,
+        SoldOutRankingFacade.class,
         UserBalanceMapper.class,
         PaymentMapper.class
 })
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-class PaymentFacadeConcurrencyTest {
+class PaymentFacadeRankingIntegrationTest {
 
     @Autowired
     private PaymentFacade paymentFacade;
+
+    @Autowired
+    private SoldOutRankingFacade soldOutRankingFacade;
 
     @Autowired
     private UserJpaRepository userJpaRepository;
@@ -71,10 +71,10 @@ class PaymentFacadeConcurrencyTest {
     private ReservationJpaRepository reservationJpaRepository;
 
     @Autowired
-    private PaymentJpaRepository paymentJpaRepository;
+    private SeatInventoryJpaRepository seatInventoryJpaRepository;
 
     @Autowired
-    private SeatInventoryJpaRepository seatInventoryJpaRepository;
+    private PaymentJpaRepository paymentJpaRepository;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
@@ -91,22 +91,21 @@ class PaymentFacadeConcurrencyTest {
     }
 
     @Test
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    @DisplayName("같은 사용자 결제 두 건이 동시에 요청되면 한 건만 성공하고 최종 잔액은 3000원이다")
-    void payConcurrently_onlyOneSucceeds() throws Exception {
-        UserJpaEntity user = userJpaRepository.save(new UserJpaEntity("user-1", 10_000L));
+    @DisplayName("결제 성공 후 잔여 좌석이 0이면 빠른 매진 랭킹에 적재된다")
+    void pay_whenSoldOut_recordsRanking() {
+        UserJpaEntity user = userJpaRepository.save(new UserJpaEntity("user-1", 20_000L));
         ConcertJpaEntity concert = concertJpaRepository.save(new ConcertJpaEntity("concert-1", 7_000L));
         ConcertScheduleJpaEntity schedule = concertScheduleJpaRepository.save(
-                new ConcertScheduleJpaEntity(concert.getId(), LocalDate.of(2026, 4, 20))
+                new ConcertScheduleJpaEntity(concert.getId(), LocalDate.of(2026, 4, 30))
         );
         ReservationJpaEntity reservation = reservationJpaRepository.save(
                 new ReservationJpaEntity(
                         user.getId(),
                         schedule.getId(),
                         1,
-                        kr.hhplus.be.server.domain.reservation.ReservationStatus.TEMPORARY,
-                        LocalDateTime.now().minusMinutes(1),
-                        LocalDateTime.now().plusMinutes(5),
+                        ReservationStatus.TEMPORARY,
+                        LocalDateTime.now().minusMinutes(2),
+                        LocalDateTime.now().plusMinutes(3),
                         null
                 )
         );
@@ -114,47 +113,65 @@ class PaymentFacadeConcurrencyTest {
                 new SeatInventoryJpaEntity(
                         schedule.getId(),
                         1,
-                        kr.hhplus.be.server.domain.seat.SeatStatus.HELD,
+                        SeatStatus.HELD,
                         user.getId(),
-                        LocalDateTime.now().plusMinutes(5),
+                        LocalDateTime.now().plusMinutes(3),
                         null
                 )
         );
 
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
-        CountDownLatch startLatch = new CountDownLatch(1);
+        paymentFacade.pay(new PayReservationCommand("ignored", user.getId(), reservation.getId()));
 
-        Future<Boolean> future1 = executorService.submit(tryPay(startLatch, new PayReservationCommand("ignored", user.getId(), reservation.getId())));
-        Future<Boolean> future2 = executorService.submit(tryPay(startLatch, new PayReservationCommand("ignored", user.getId(), reservation.getId())));
-
-        startLatch.countDown();
-
-        int successCount = 0;
-        successCount += future1.get() ? 1 : 0;
-        successCount += future2.get() ? 1 : 0;
-
-        executorService.shutdown();
-
-        assertThat(successCount).isEqualTo(1);
         assertThat(paymentJpaRepository.count()).isEqualTo(1);
-        assertThat(userJpaRepository.findById(user.getId()))
-                .isPresent()
-                .get()
-                .extracting(UserJpaEntity::getBalance)
-                .isEqualTo(3_000L);
+        assertThat(paymentJpaRepository.findAll().get(0).getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(soldOutRankingFacade.getTop(10))
+                .extracting("scheduleId")
+                .containsExactly(schedule.getId());
     }
 
-    private Callable<Boolean> tryPay(CountDownLatch startLatch, PayReservationCommand command) {
-        return () -> {
-            startLatch.await();
-            try {
-                paymentFacade.pay(command);
-                return true;
-            } catch (OptimisticLockConflictException e) {
-                return false;
-            } catch (Exception e) {
-                return false;
-            }
-        };
+    @Test
+    @DisplayName("완판되지 않은 회차는 빠른 매진 랭킹에 포함되지 않는다")
+    void pay_whenNotSoldOut_doesNotRecordRanking() {
+        UserJpaEntity user = userJpaRepository.save(new UserJpaEntity("user-2", 20_000L));
+        ConcertJpaEntity concert = concertJpaRepository.save(new ConcertJpaEntity("concert-2", 7_000L));
+        ConcertScheduleJpaEntity schedule = concertScheduleJpaRepository.save(
+                new ConcertScheduleJpaEntity(concert.getId(), LocalDate.of(2026, 5, 1))
+        );
+        ReservationJpaEntity reservation = reservationJpaRepository.save(
+                new ReservationJpaEntity(
+                        user.getId(),
+                        schedule.getId(),
+                        1,
+                        ReservationStatus.TEMPORARY,
+                        LocalDateTime.now().minusMinutes(2),
+                        LocalDateTime.now().plusMinutes(3),
+                        null
+                )
+        );
+        seatInventoryJpaRepository.save(
+                new SeatInventoryJpaEntity(
+                        schedule.getId(),
+                        1,
+                        SeatStatus.HELD,
+                        user.getId(),
+                        LocalDateTime.now().plusMinutes(3),
+                        null
+                )
+        );
+        seatInventoryJpaRepository.save(
+                new SeatInventoryJpaEntity(
+                        schedule.getId(),
+                        2,
+                        SeatStatus.AVAILABLE,
+                        null,
+                        null,
+                        null
+                )
+        );
+
+        paymentFacade.pay(new PayReservationCommand("ignored", user.getId(), reservation.getId()));
+
+        assertThat(paymentJpaRepository.count()).isEqualTo(1);
+        assertThat(soldOutRankingFacade.getTop(10)).isEmpty();
     }
 }

@@ -1,6 +1,7 @@
 package kr.hhplus.be.server.infrastructure.persistence.repository;
 
 import jakarta.persistence.LockModeType;
+import kr.hhplus.be.server.domain.seat.SeatStatus;
 import kr.hhplus.be.server.infrastructure.persistence.entity.SeatInventoryJpaEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -44,4 +45,6 @@ public interface SeatInventoryJpaRepository extends JpaRepository<SeatInventoryJ
             @Param("scheduleId") Long scheduleId,
             @Param("now") LocalDateTime now
     );
+
+    long countByScheduleIdAndStatusNot(Long scheduleId, SeatStatus status);
 }

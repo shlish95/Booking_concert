@@ -254,6 +254,37 @@
 
 - `feature/finalize-concurrency`
 
+### 2.11 STEP13 빠른 매진 랭킹 1차 구현
+
+목표:
+
+- Redis Sorted Set 기반으로 완판된 회차의 빠른 매진 랭킹을 적재하고 조회한다.
+
+주요 산출물:
+
+- `docs/steps/step13-ranking.md`
+- `RedisSoldOutRankingAdapter`
+- `SoldOutRankingFacade`
+- `PaymentFacade` 결제 성공 후 랭킹 적재 연결
+- `RedisSoldOutRankingAdapterTest`
+- `PaymentFacadeRankingIntegrationTest`
+
+주요 내용:
+
+- 랭킹 정의는 판매 시작 이후 완판까지 걸린 시간 기준의 전체 랭킹 하나로 제한했다.
+- 키는 `ranking:concert:soldout:speed:all`, member는 `schedule:{scheduleId}`, score는 `soldOutDurationSeconds`를 사용한다.
+- 결제 성공 후 좌석이 최종 `RESERVED`가 되고 잔여 좌석이 0이 되는 순간에만 랭킹을 적재한다.
+- 중복 적재는 Redis `addIfAbsent`로 방지한다.
+- 조회는 score 오름차순 Top N 기준으로 제공한다.
+
+관련 브랜치:
+
+- `feature/finalize-concurrency`
+
+최종 반영 브랜치:
+
+- `feature/finalize-concurrency`
+
 ## 3. 현재 기준 핵심 정책
 
 - 아키텍처는 도메인 중심의 가벼운 클린 아키텍처를 따른다.

@@ -13,8 +13,13 @@ import java.time.LocalDateTime;
 public class MockPaymentAdapter implements PaymentPort {
 
     @Override
-    public Long getPaymentAmount(Long userId, Long reservationId) {
-        return 50_000L;
+    public PaymentContext getPaymentContext(Long userId, Long reservationId) {
+        return new PaymentContext(
+                reservationId,
+                1L,
+                50_000L,
+                LocalDateTime.now().minusMinutes(10)
+        );
     }
 
     @Override
@@ -27,5 +32,10 @@ public class MockPaymentAdapter implements PaymentPort {
                 PaymentStatus.SUCCESS,
                 paidAt
         );
+    }
+
+    @Override
+    public boolean isScheduleSoldOut(Long scheduleId) {
+        return false;
     }
 }

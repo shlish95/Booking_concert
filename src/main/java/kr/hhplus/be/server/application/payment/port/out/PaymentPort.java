@@ -6,7 +6,17 @@ import java.time.LocalDateTime;
 
 public interface PaymentPort {
 
-    Long getPaymentAmount(Long userId, Long reservationId);
+    PaymentContext getPaymentContext(Long userId, Long reservationId);
 
     Payment saveSuccess(Long userId, Long reservationId, Long amount, LocalDateTime paidAt);
+
+    boolean isScheduleSoldOut(Long scheduleId);
+
+    record PaymentContext(
+            Long reservationId,
+            Long scheduleId,
+            Long amount,
+            LocalDateTime salesOpenedAt
+    ) {
+    }
 }
