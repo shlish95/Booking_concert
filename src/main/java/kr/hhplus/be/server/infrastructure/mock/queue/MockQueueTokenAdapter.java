@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 @Component
 @Profile("mock")
@@ -38,5 +40,15 @@ public class MockQueueTokenAdapter implements QueueTokenPort {
                 null,
                 null
         );
+    }
+
+    @Override
+    public Long getWaitingPosition(Long concertId, String token) {
+        return 125L;
+    }
+
+    @Override
+    public List<QueueToken> activateTopWaiting(Long concertId, int maxActiveCount) {
+        return Collections.emptyList();
     }
 }

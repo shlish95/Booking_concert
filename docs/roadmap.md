@@ -285,6 +285,36 @@
 
 - `feature/finalize-concurrency`
 
+### 2.12 STEP14 Redis 대기열 1차 구현
+
+목표:
+
+- Redis 기반으로 콘서트별 대기열의 발급, 상위 N명 활성화, ACTIVE 검증을 구현한다.
+
+주요 산출물:
+
+- `docs/steps/step14-queue.md`
+- `QueueTokenPort` Redis 대기열 메서드 확장
+- `RedisQueueTokenAdapter`
+- `QueueTokenFacade` 활성화 orchestration
+- `QueueTokenFacadeRedisTest`
+
+주요 내용:
+
+- waiting은 `Sorted Set`, active는 `Set`, token metadata는 `Hash`를 사용한다.
+- 키 구조는 `queue:{concertId}:waiting`, `queue:{concertId}:active`, `queue:token:{token}`로 고정했다.
+- waiting ZSET의 score는 `issuedAtEpochMillis`, member는 `token`이다.
+- 1차 범위는 토큰 발급, 상위 N명 `WAITING -> ACTIVE`, ACTIVE 토큰 검증까지만 다룬다.
+- 사용 종료 후 후속 승격, 고급 Lua 원자화, 복잡한 스케줄링은 다음 단계로 보류한다.
+
+관련 브랜치:
+
+- `feature/finalize-concurrency`
+
+최종 반영 브랜치:
+
+- `feature/finalize-concurrency`
+
 ## 3. 현재 기준 핵심 정책
 
 - 아키텍처는 도메인 중심의 가벼운 클린 아키텍처를 따른다.

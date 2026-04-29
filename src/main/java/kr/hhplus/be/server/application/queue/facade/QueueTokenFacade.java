@@ -9,6 +9,8 @@ import kr.hhplus.be.server.application.queue.usecase.IssueQueueTokenUseCase;
 import kr.hhplus.be.server.domain.queue.QueueToken;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class QueueTokenFacade implements IssueQueueTokenUseCase, GetQueueTokenUseCase {
 
@@ -26,6 +28,12 @@ public class QueueTokenFacade implements IssueQueueTokenUseCase, GetQueueTokenUs
     @Override
     public QueueTokenResult get(GetQueueTokenQuery query) {
         return toResult(queueTokenPort.findByConcertIdAndToken(query.concertId(), query.token()));
+    }
+
+    public List<QueueTokenResult> activateTopWaiting(Long concertId, int maxActiveCount) {
+        return queueTokenPort.activateTopWaiting(concertId, maxActiveCount).stream()
+                .map(this::toResult)
+                .toList();
     }
 
     private QueueTokenResult toResult(QueueToken queueToken) {

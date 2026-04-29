@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 
 @Component
 @Profile("!mock")
@@ -52,5 +54,18 @@ public class QueueTokenPersistenceAdapter implements QueueTokenPort {
                 .orElseThrow(() -> new IllegalArgumentException("대기열 토큰을 찾을 수 없습니다."));
 
         return queueTokenMapper.toDomain(entity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Long getWaitingPosition(Long concertId, String token) {
+        return queueTokenJpaRepository.findByConcertIdAndToken(concertId, token)
+                .map(QueueTokenJpaEntity::getQueuePosition)
+                .orElseThrow(() -> new IllegalArgumentException("대기열 토큰을 찾을 수 없습니다."));
+    }
+
+    @Override
+    public List<QueueToken> activateTopWaiting(Long concertId, int maxActiveCount) {
+        return Collections.emptyList();
     }
 }
